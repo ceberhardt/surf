@@ -103,10 +103,11 @@ class ReaderPlugin(RDFQueryReader):
         boolQuery = self.__con.prepareBooleanQuery(QueryLanguage.SPARQL, q_string)
         return boolQuery.evaluate()
 
-    def __execute_sparql(self, q_string):
+    def __execute_sparql(self, q_string, **kwargs):
         self.log.debug(q_string)
         tupleQuery = self.__con.prepareTupleQuery(QueryLanguage.SPARQL, q_string)
-        tupleQuery.setIncludeInferred(self.inference)
+        inference = kwargs['inference'] if 'inference' in kwargs.keys() else self.inference
+        tupleQuery.setIncludeInferred(inference)
         return tupleQuery.evaluate()
 
     def execute_sparql(self, q_string, format = 'JSON'):
