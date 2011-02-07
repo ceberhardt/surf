@@ -59,10 +59,21 @@ class ReaderPlugin(RDFQueryReader):
 
         self.__allegro_server = AllegroGraphServer(self.__server, port = self.__port)
         self.__allegro_catalog = self.__allegro_server.openCatalog(self.__catalog)
-        self.__allegro_repository = self.__allegro_catalog.getRepository(self.__repository, Repository.ACCESS)
-        self.__allegro_repository.initialize()
+        if type(self.__repository) == list and len(self.__repository) > 1:
+            connections_to_federate = []
+            for repository in self.__repository:
+                connections_to_federate.append(self.__allegro_catalog
+                                               .getRepository(repository, Repository.ACCESS)
+                                               .initialize().getConnection())
+            self.__allegro_repository = None # self.__allegro_repository unused
+            self.__con = self.__allegro_server.openFederated(connections_to_federate, True)
+        else:
+            if type(self.__repository) == list and len(self.__repository) == 1:
+                self.__repository = self.__repository[0]
+            self.__allegro_repository = self.__allegro_catalog.getRepository(self.__repository, Repository.ACCESS)
+            self.__allegro_repository.initialize()
 
-        self.__con = self.allegro_repository.getConnection()
+            self.__con = self.allegro_repository.getConnection()
 
     results_format = property(lambda self: 'json')
     server = property(lambda self: self.__server)
