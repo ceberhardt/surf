@@ -61,11 +61,14 @@ class ReaderPlugin(RDFQueryReader):
         self.__allegro_catalog = self.__allegro_server.openCatalog(self.__catalog)
         if type(self.__repository) == list and len(self.__repository) > 1:
             connections_to_federate = []
-            for repository in self.__repository:
+            repositories_to_federate = []
+            for one_repository in self.__repository:
+                repositories_to_federate.append(self.__allegro_catalog
+                                               .getRepository(one_repository, Repository.ACCESS))
                 connections_to_federate.append(self.__allegro_catalog
-                                               .getRepository(repository, Repository.ACCESS)
+                                               .getRepository(one_repository, Repository.ACCESS)
                                                .initialize().getConnection())
-            self.__allegro_repository = None # self.__allegro_repository unused
+            self.__allegro_repository = repositories_to_federate
             self.__con = self.__allegro_server.openFederated(connections_to_federate, True)
         else:
             if type(self.__repository) == list and len(self.__repository) == 1:

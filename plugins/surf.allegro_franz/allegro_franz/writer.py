@@ -57,6 +57,24 @@ class WriterPlugin(RDFWriter):
             self.__allegro_server = self.reader.allegro_server
             self.__allegro_catalog = self.reader.allegro_catalog
             self.__allegro_repository = self.reader.allegro_repository
+            if type(self.__repository) == list and len(self.__repository) > 1:
+                connections_to_federate = []
+                repositories_to_federate = []
+                for one_repository in self.reader.allegro_repository:
+                    repositories_to_federate.append(self.__allegro_catalog
+                                                   .getRepository(one_repository, Repository.ACCESS))
+                    connections_to_federate.append(self.__allegro_catalog
+                                                   .getRepository(one_repository, Repository.ACCESS)
+                                                   .initialize().getConnection())
+                self.__allegro_repository = repositories_to_federate
+                self.__con = self.__allegro_server.openFederated(connections_to_federate, True)
+            else:
+                if type(self.__repository) == list and len(self.__repository) == 1:
+                    self.__repository = self.__repository[0]
+                self.__allegro_repository = self.__allegro_catalog.getRepository(self.__repository, Repository.ACCESS)
+                self.__allegro_repository.initialize()
+    
+                self.__con = self.allegro_repository.getConnection()
 
         else:
             self.__server = kwargs['server'] if 'server' in kwargs else 'localhost'
@@ -69,11 +87,24 @@ class WriterPlugin(RDFWriter):
 
             self.__allegro_server = AllegroGraphServer(self.__server, port = self.__port)
             self.__allegro_catalog = self.__allegro_server.openCatalog(self.__catalog)
-            self.__allegro_repository = self.__allegro_catalog.getRepository(self.__repository, Repository.ACCESS)
-            self.__allegro_repository.initialize()
-
-        self.__con = self.__allegro_repository.getConnection()
-        self.__f = self.__allegro_repository.getValueFactory()
+            if type(self.__repository) == list and len(self.__repository) > 1:
+                connections_to_federate = []
+                repositories_to_federate = []
+                for repository in self.__repository:
+                    repositories_to_federate.append(self.__allegro_catalog
+                                                   .getRepository(repository, Repository.ACCESS))
+                    connections_to_federate.append(self.__allegro_catalog
+                                                   .getRepository(repository, Repository.ACCESS)
+                                                   .initialize().getConnection())
+                self.__allegro_repository = repositories_to_federate
+                self.__con = self.__allegro_server.openFederated(connections_to_federate, True)
+            else:
+                if type(self.__repository) == list and len(self.__repository) == 1:
+                    self.__repository = self.__repository[0]
+                self.__allegro_repository = self.__allegro_catalog.getRepository(self.__repository, Repository.ACCESS)
+                self.__allegro_repository.initialize()
+    
+                self.__con = self.allegro_repository.getConnection()
 
     results_format = property(lambda self: 'json')
     server = property(lambda self: self.__server)
@@ -125,11 +156,11 @@ class WriterPlugin(RDFWriter):
     # used by the sesame api
     def __add(self, s = None, p = None, o = None, context = None):
         self.log.info('ADD TRIPLE: ' + unicode(s) + ', ' + unicode(p) + ', ' + unicode(o) + ', ' + unicode(context))
-        self.__con.addTriple(toSesame(s, self.__f), toSesame(p, self.__f), toSesame(o, self.__f), contexts = toSesame(context, self.__f))
+        self.__con.addTriple(toSesame(s, self.__con), toSesame(p, self.__con), toSesame(o, self.__con), contexts = toSesame(context, self.__con))
 
     def __remove(self, s = None, p = None, o = None, context = None):
         self.log.info('REM TRIPLE: ' + unicode(s) + ', ' + unicode(p) + ', ' + unicode(o) + ', ' + unicode(context))
-        self.__con.removeTriples(toSesame(s, self.__f), toSesame(p, self.__f), toSesame(o, self.__f), contexts = toSesame(context, self.__f))
+        self.__con.removeTriples(toSesame(s, self.__con), toSesame(p, self.__con), toSesame(o, self.__con), contexts = toSesame(context, self.__con))
 
     def index_triples(self, **kwargs):
         """ Index triples if this functionality is present.
@@ -154,14 +185,14 @@ class WriterPlugin(RDFWriter):
         context = kwargs['context'] if 'context' in kwargs else None
         server_side = kwargs['server_side'] if 'server_side' in kwargs else True
         if source:
-            self.__con.addFile(source, base = base, format = format, context = toSesame(context, self.__f), serverSide = server_side)
+            self.__con.addFile(source, base = base, format = format, context = toSesame(context, self.__con), serverSide = server_side)
             return True
         return False
 
     def _clear(self, context = None):
         """ Clear the triple-store. """
 
-        self.__con.clear(contexts = toSesame(context, self.__f))
+        self.__con.clear(contexts = toSesame(context, self.__con))
 
     # Extra functionality
     def register_fts_predicate(self, namespace, localname):
