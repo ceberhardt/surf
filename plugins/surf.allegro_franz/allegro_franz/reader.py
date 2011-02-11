@@ -120,7 +120,7 @@ class ReaderPlugin(RDFQueryReader):
     def __execute_sparql(self, q_string, **kwargs):
         self.log.debug(q_string)
         tupleQuery = self.__con.prepareTupleQuery(QueryLanguage.SPARQL, q_string)
-        inference = kwargs['inference'] if 'inference' in kwargs.keys() else self.inference
+        inference = kwargs['inference'] if 'inference' in kwargs else self.inference
         tupleQuery.setIncludeInferred(inference)
         return tupleQuery.evaluate()
 
