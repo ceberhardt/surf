@@ -36,9 +36,9 @@
 __author__ = 'Cosmin Basca'
 
 from surf.plugin.reader import RDFReader
-from surf.query import Query, Union, Group
+from surf.query import Query, Union
 from surf.query import a, ask, select, optional_group, named_group
-from surf.resource.util import Q
+
 from surf.rdf import URIRef
 
 def query_SP(s, p, direct, context):
@@ -135,82 +135,8 @@ class RDFQueryReader(RDFReader):
         result = self._execute(query)
         return self.convert(result, 's', 'c')
 
-    @classmethod
-    def __edge_iterator(cls, edge='e'):
-        edge_idx = 0
-        while True:
-            yield '?' + edge + str(edge_idx)
-            edge_idx += 1
-
-    @classmethod
-    def __build_attribute_clause(cls, (edges, values), edge_iterator):
-        def order_terms(a, b, c, direct):
-            if direct:
-                return (a, b, c)
-            else:
-                return (c, b, a)
-
-        last_edge = "?s"
-        clauses = []
-
-        # Build path to attribute, value pair
-        for attribute, direct in edges[:-1]:
-            edge_variable = edge_iterator.next()
-
-            clauses.append(order_terms(last_edge,
-                                       attribute,
-                                       edge_variable,
-                                       direct))
-            last_edge = edge_variable
-
-        # Attach value query to path
-        attribute, direct = edges[-1]
-        if hasattr(values, "__iter__"):
-            union_clause = Union()
-            for value in values:
-                union_clause.append(order_terms(last_edge,
-                                                attribute,
-                                                value,
-                                                direct))
-            clauses.append(union_clause)
-        else:
-            clauses.append(order_terms(last_edge,
-                                       attribute,
-                                       values,
-                                       direct))
-        return clauses
-
-    @classmethod
-    def __build_where_clause(cls, q_obj, edge_iterator):
-        clauses = []
-        for child in q_obj.children:
-            if isinstance(child, Q):
-                subclauses = cls.__build_where_clause(child, edge_iterator)
-                connection = child.connection
-            else:
-                subclauses = cls.__build_attribute_clause(child, edge_iterator)
-                connection = Q.AND
-
-            if len(subclauses) > 1:
-                if connection == Q.AND:
-                    clause = Group(subclauses)
-                elif connection == Q.OR:
-                    clause = Union(subclauses)
-            else:
-                clause = subclauses[0]
-
-            clauses.append(clause)
-
-        return clauses
-
     def __apply_limit_offset_order_get_by_filter(self, params, query):
         """ Apply limit, offset, order parameters to query. """
-        def order_terms(a, b, c, direct):
-            if direct:
-                return (a, b, c)
-            else:
-                return (c, b, a)
-
 
         if "limit" in params:
             query.limit(params["limit"])
@@ -219,13 +145,20 @@ class RDFQueryReader(RDFReader):
             query.offset(params["offset"])
 
         if "get_by" in params:
-            edges = self.__edge_iterator()
-            clauses = self.__build_where_clause(params["get_by"], edges)
-
-            if params["get_by"].connection == Q.OR:
-                query.where(Union(clauses))
-            else:
-                query.where(*clauses)
+            for attribute, values, direct  in params["get_by"]:
+                if direct:
+                    order_terms = lambda a, b ,c: (a, b, c)
+                else:
+                    order_terms = lambda a, b ,c: (c, b, a)
+                    
+                if hasattr(values, "__iter__"):
+                    where_clause = Union()
+                    for value in values:
+                        where_clause.append(order_terms("?s", attribute, value))
+                else:
+                    where_clause = order_terms("?s", attribute, values) 
+                
+                query.where(where_clause)
 
         if "filter" in params:
             filter_idx = 0
@@ -242,29 +175,14 @@ class RDFQueryReader(RDFReader):
                     query.order_by("DESC(?s)")
                 else:
                     query.order_by("?s")
-            elif params["order"] != False:
+            else:
                 # Match another variable, order by it
-                edges = params["order"]
-                edge_idx = 0
-                last_edge = "?s"
-                where_clauses = []
-
-                # Build path to attribute, value pair for which we sort
-                for attribute, direct in edges:
-                    edge_idx += 1
-                    edge_variable = "?o%d" % edge_idx
-
-                    where_clauses.append(order_terms(last_edge,
-                                                     attribute,
-                                                     edge_variable,
-                                                     direct))
-                    last_edge = edge_variable
-
-                query.optional_group(*where_clauses)
+                query.optional_group(("?s", params["order"], "?o"))
                 if "desc" in params and params["desc"]:
-                    query.order_by("DESC(%s)" % last_edge)
+                    query.order_by("DESC(?o)")
                 else:
-                    query.order_by(last_edge)
+                    query.order_by("?o")
+
 
         return query
 
@@ -435,11 +353,11 @@ class RDFQueryReader(RDFReader):
                 elif i == last:
                     if v not in data:
                         data[v] = []
-
+                    
                     value = row.get(keys[i + 1])
                     if value:
                         data[v].append(value)
-
+        
         return results
 
     # public interface
